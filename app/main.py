@@ -1,47 +1,73 @@
 import os
 
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
 
 from app.github import GitHubClient
 from app import svg
+from app.whitelist import is_allowed
 
 
-USERNAME = os.getenv("GITHUB_USERNAME", "lnavarrocarter")
+DEFAULT_USERNAME = os.getenv("GITHUB_USERNAME", "lnavarrocarter")
 app = Flask(__name__)
 client = GitHubClient()
 
+GITHUB_CARDS = {
+    "overview": lambda username, theme: svg.overview(client.profile(username), client.repositories(username), theme),
+    "languages": lambda username, theme: svg.languages(client.repositories(username), theme),
+    "activity": lambda username, theme: svg.activity(client.events(username), theme),
+    "pulse": lambda username, theme: svg.pulse(client.repositories(username), theme),
+}
 
-def svg_response(content):
-    return Response(content, mimetype="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"})
+# Instagram y LinkedIn no ofrecen una API pública para leer métricas de
+# cualquier perfil de terceros; se muestran como "próximamente" en vez de
+# intentar scraping, que rompe sus términos de servicio y es poco confiable.
+UNSUPPORTED_PLATFORMS = {"instagram", "linkedin"}
+
+
+def svg_response(content, status=200):
+    return Response(content, status=status, mimetype="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/healthz")
 def healthz():
-    return jsonify(status="ok", username=USERNAME)
+    return jsonify(status="ok", username=DEFAULT_USERNAME)
 
 
-@app.get("/metrics/overview.svg")
-def overview():
-    return svg_response(svg.overview(client.profile(USERNAME), client.repositories(USERNAME)))
+@app.get("/metrics/<card>.svg")
+def legacy_card(card):
+    theme = request.args.get("theme")
+    handler = GITHUB_CARDS.get(card)
+    if not handler:
+        return svg_response(svg.message_card("Tarjeta no encontrada", f"No existe la métrica '{card}'.", theme, danger=True), status=404)
+    return svg_response(handler(DEFAULT_USERNAME, theme))
 
 
-@app.get("/metrics/languages.svg")
-def languages():
-    return svg_response(svg.languages(client.repositories(USERNAME)))
+@app.get("/cards/<platform>/<username>/<card>.svg")
+def public_card(platform, username, card):
+    theme = request.args.get("theme")
 
+    if platform in UNSUPPORTED_PLATFORMS:
+        if not is_allowed(platform, username):
+            return svg_response(svg.message_card("Acceso no autorizado", f"@{username} no está en la whitelist de {platform}.", theme, danger=True), status=403)
+        return svg_response(svg.message_card(f"{platform.title()} próximamente", "Esta plataforma no expone una API pública de métricas por perfil todavía.", theme))
 
-@app.get("/metrics/activity.svg")
-def activity():
-    return svg_response(svg.activity(client.events(USERNAME)))
+    if platform != "github":
+        return svg_response(svg.message_card("Plataforma no soportada", f"'{platform}' no está disponible.", theme, danger=True), status=404)
 
+    if not is_allowed("github", username):
+        return svg_response(svg.message_card("Acceso no autorizado", f"@{username} no está en la whitelist. Solicita acceso via PR.", theme, danger=True), status=403)
 
-@app.get("/metrics/pulse.svg")
-def pulse():
-    return svg_response(svg.pulse(client.repositories(USERNAME)))
+    handler = GITHUB_CARDS.get(card)
+    if not handler:
+        return svg_response(svg.message_card("Tarjeta no encontrada", f"No existe la métrica '{card}'.", theme, danger=True), status=404)
+
+    return svg_response(handler(username, theme))
 
 
 @app.errorhandler(Exception)
 def handle_error(error):
     app.logger.exception("Unable to generate GitHub metrics")
-    return Response(svg._svg("Métricas no disponibles", '<text x="32" y="90" fill="#ff7b72" font-family="Arial, sans-serif" font-size="16">Vuelve a intentarlo en unos minutos.</text>'), status=503, mimetype="image/svg+xml")
+    theme = request.args.get("theme")
+    return svg_response(svg.message_card("Métricas no disponibles", "Vuelve a intentarlo en unos minutos.", theme, danger=True), status=503)
+
 

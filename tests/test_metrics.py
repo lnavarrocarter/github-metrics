@@ -1,6 +1,7 @@
 import unittest
 
 from app import svg
+from app.whitelist import is_allowed
 
 
 class MetricsSvgTests(unittest.TestCase):
@@ -26,6 +27,32 @@ class MetricsSvgTests(unittest.TestCase):
         events = [{"type": "PushEvent"}, {"type": "PushEvent"}, {"type": "IssuesEvent"}]
         self.assertIn("Actividad reciente", svg.activity(events))
         self.assertIn("Open-source pulse", svg.pulse(self.repositories))
+
+    def test_theme_changes_background_color(self):
+        default_card = svg.overview(self.profile, self.repositories)
+        sunset_card = svg.overview(self.profile, self.repositories, theme_name="sunset")
+        self.assertNotEqual(default_card, sunset_card)
+        self.assertIn("#1f1410", sunset_card)
+
+    def test_unknown_theme_falls_back_to_default(self):
+        card = svg.overview(self.profile, self.repositories, theme_name="does-not-exist")
+        self.assertIn("#131622", card)
+
+    def test_message_card_renders_danger_color(self):
+        card = svg.message_card("Acceso no autorizado", "sin acceso", danger=True)
+        self.assertIn("Acceso no autorizado", card)
+        self.assertIn("#ff7b72", card)
+
+
+class WhitelistTests(unittest.TestCase):
+    def test_seeded_github_username_is_allowed(self):
+        self.assertTrue(is_allowed("github", "lnavarrocarter"))
+
+    def test_unknown_username_is_rejected(self):
+        self.assertFalse(is_allowed("github", "someone-not-registered"))
+
+    def test_unknown_platform_is_rejected(self):
+        self.assertFalse(is_allowed("tiktok", "lnavarrocarter"))
 
 
 if __name__ == "__main__":

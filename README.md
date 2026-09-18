@@ -4,12 +4,44 @@ Servicio propio para generar tarjetas SVG de métricas públicas de GitHub. Est�
 
 ## Endpoints
 
+### Perfil propio (sin whitelist, usa `GITHUB_USERNAME`)
+
 | Ruta | Métrica |
 | --- | --- |
 | `/metrics/overview.svg` | Repositorios, seguidores, estrellas y forks. |
 | `/metrics/languages.svg` | Lenguajes predominantes por repositorio. |
 | `/metrics/activity.svg` | Eventos públicos recientes: pushes, pull requests e issues. |
 | `/metrics/pulse.svg` | Salud del portafolio: proyectos activos, actividad y archivados. |
+
+### Multi-perfil (requiere whitelist)
+
+```
+/cards/github/<username>/overview.svg
+/cards/github/<username>/languages.svg
+/cards/github/<username>/activity.svg
+/cards/github/<username>/pulse.svg
+```
+
+Todas las rutas aceptan `?theme=` con uno de: `tokyonight` (default), `sunset`, `forest`, `mono`.
+
+### Instagram y LinkedIn
+
+```
+/cards/instagram/<username>/overview.svg
+/cards/linkedin/<username>/overview.svg
+```
+
+Ninguna de las dos plataformas ofrece una API pública para leer métricas de perfiles de terceros sin que cada usuario conecte su propia cuenta (Instagram exige una cuenta Business/Creator vinculada a una Página de Meta con OAuth propio; LinkedIn no tiene API pública de métricas de perfil para terceros). Por eso estas rutas hoy devuelven una tarjeta "próximamente" en vez de hacer scraping, que violaría los términos de servicio y sería poco confiable. El diseño ya deja el enrutamiento y la whitelist listos para conectar datos reales cuando cada usuario aporte sus propias credenciales OAuth.
+
+## Whitelist: cómo sumar tu perfil
+
+El servicio es multi-tenant pero cerrado por whitelist: sólo usuarios listados en [config/whitelist.json](config/whitelist.json) pueden generar tarjetas vía `/cards/<platform>/<username>/...`. Para sumarte:
+
+1. Haz un fork y abre un PR agregando tu usuario de GitHub al arreglo `github` en `config/whitelist.json`.
+2. Un mantenedor revisa y aprueba el PR (evita abuso y controla el consumo de la API de GitHub).
+3. Una vez mergeado y desplegado, usa `/cards/github/<tu-usuario>/overview.svg` en tu propio README.
+
+Un usuario fuera de la whitelist recibe una tarjeta 403 "Acceso no autorizado", nunca un error genérico.
 
 Las próximas métricas priorizadas son una racha de contribuciones basada en GraphQL, releases publicados, PRs fusionados y un resumen anual. Están listadas como trabajo pendiente en [TASKS.md](TASKS.md).
 
