@@ -20,17 +20,52 @@ def _defs(theme):
 </defs>'''
 
 
-def _live_dot(theme, x=696, y=32):
+def _live_dot(theme, x=684, y=32):
     return f'''<circle cx="{x}" cy="{y}" r="4" fill="{theme['green']}">
 <animate attributeName="opacity" values="1;0.25;1" dur="2s" repeatCount="indefinite"/>
 </circle>
 <circle cx="{x}" cy="{y}" r="4" fill="none" stroke="{theme['green']}" stroke-width="1.5" opacity="0.6">
 <animate attributeName="r" values="4;10;4" dur="2s" repeatCount="indefinite"/>
 <animate attributeName="opacity" values="0.6;0;0.6" dur="2s" repeatCount="indefinite"/>
-</circle>'''
+</circle>
+<text x="{x - 12}" y="36" fill="{theme['green']}" font-family="Arial, sans-serif" font-size="11" text-anchor="end">en vivo</text>'''
 
 
-def _svg(title, body, theme=None, theme_name=None):
+def _manual_dot(theme, x=684, y=32):
+    return f'''<circle cx="{x}" cy="{y}" r="4" fill="{theme['muted']}"/>
+<text x="{x - 12}" y="36" fill="{theme['muted']}" font-family="Arial, sans-serif" font-size="11" text-anchor="end">manual</text>'''
+
+
+def _indicator(theme, mode):
+    if mode == "manual":
+        return _manual_dot(theme)
+    if mode == "live":
+        return _live_dot(theme)
+    return ""
+
+
+def _avatar(url, theme, x=32, y=58, size=64):
+    if not url:
+        return ""
+    clip_id = "avatar-clip"
+    radius = size / 2
+    cx = x + radius
+    cy = y + radius
+    return f'''<defs>
+<clipPath id="{clip_id}"><circle cx="{cx}" cy="{cy}" r="{radius}"/></clipPath>
+</defs>
+<circle cx="{cx}" cy="{cy}" r="{radius + 2}" fill="none" stroke="{theme['accent']}" stroke-width="2"/>
+<image href="{escape(url)}" x="{x}" y="{y}" width="{size}" height="{size}" clip-path="url(#{clip_id})" preserveAspectRatio="xMidYMid slice"/>'''
+
+
+def _monogram(label, theme, x=32, y=58, size=64):
+    cx = x + size / 2
+    cy = y + size / 2
+    return f'''<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="{size / 4}" fill="{theme['panel']}" stroke="{theme['accent']}" stroke-width="2"/>
+<text x="{cx}" y="{cy + 7}" fill="{theme['accent']}" font-family="Arial, sans-serif" font-size="22" font-weight="700" text-anchor="middle">{escape(label)}</text>'''
+
+
+def _svg(title, body, theme=None, theme_name=None, indicator="live"):
     theme = theme or get_theme(theme_name)
     safe_title = escape(title)
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}" role="img" aria-labelledby="title">
@@ -40,7 +75,7 @@ def _svg(title, body, theme=None, theme_name=None):
 <rect x="1" y="1" width="718" height="218" rx="9" fill="none" stroke="url(#border-glow)" stroke-width="1.5"/>
 <rect x="1" y="1" width="718" height="218" rx="9" fill="none" stroke="{theme['border']}"/>
 <text x="32" y="43" fill="{theme['text']}" font-family="Arial, sans-serif" font-size="22" font-weight="700">{safe_title}</text>
-{_live_dot(theme)}
+{_indicator(theme, indicator)}
 {body}</svg>'''
 
 
@@ -59,10 +94,11 @@ def overview(profile, repositories, theme_name=None):
     stars = sum(repo.get("stargazers_count", 0) for repo in repositories)
     forks = sum(repo.get("forks_count", 0) for repo in repositories)
     body = "".join((
-        _metric(32, "repositorios públicos", profile.get("public_repos", 0), theme),
-        _metric(210, "seguidores", profile.get("followers", 0), theme, theme["green"]),
-        _metric(370, "estrellas recibidas", stars, theme, theme["orange"]),
-        _metric(565, "forks", forks, theme),
+        _avatar(profile.get("avatar_url"), theme),
+        _metric(130, "repositorios públicos", profile.get("public_repos", 0), theme),
+        _metric(310, "seguidores", profile.get("followers", 0), theme, theme["green"]),
+        _metric(470, "estrellas recibidas", stars, theme, theme["orange"]),
+        _metric(620, "forks", forks, theme),
         _footer(f'@{profile.get("login", "")} · actualizado automáticamente', theme),
     ))
     return _svg("GitHub overview", body, theme)
@@ -123,5 +159,48 @@ def message_card(title, message, theme_name=None, danger=False):
     theme = get_theme(theme_name)
     color = theme["danger"] if danger else theme["muted"]
     body = f'<text x="32" y="90" fill="{color}" font-family="Arial, sans-serif" font-size="16">{escape(message)}</text>'
-    return _svg(title, body, theme)
+    return _svg(title, body, theme, indicator=None)
+
+
+PLATFORM_LABELS = {"instagram": "IG", "linkedin": "in"}
+PLATFORM_TITLES = {"instagram": "Instagram", "linkedin": "LinkedIn"}
+
+
+def social_profile(platform, data, theme_name=None):
+    theme = get_theme(theme_name)
+    title = PLATFORM_TITLES.get(platform, platform.title())
+    monogram = PLATFORM_LABELS.get(platform, platform[:2].upper())
+
+    def fmt(value):
+        return str(value) if value is not None else "—"
+
+    if platform == "instagram":
+        metrics = [("publicaciones", fmt(data.get("posts"))), ("seguidores", fmt(data.get("followers")))]
+    elif platform == "linkedin":
+        metrics = [("conexiones", fmt(data.get("connections")))]
+    else:
+        metrics = []
+
+    name = data.get("display_name") or data.get("handle", "")
+    handle = data.get("handle", "")
+    subtitle = data.get("headline") or data.get("bio") or ""
+
+    rows = [
+        _monogram(monogram, theme, x=32, y=54, size=56),
+        f'<text x="104" y="72" fill="{theme["text"]}" font-family="Arial, sans-serif" font-size="18" font-weight="700">{escape(name)}</text>',
+        f'<text x="104" y="92" fill="{theme["muted"]}" font-family="Arial, sans-serif" font-size="13">@{escape(handle)}</text>',
+    ]
+    if subtitle:
+        rows.append(f'<text x="104" y="110" fill="{theme["muted"]}" font-family="Arial, sans-serif" font-size="12">{escape(subtitle)}</text>')
+
+    x = 32
+    for label, value in metrics:
+        rows.append(f'<text x="{x}" y="152" fill="{theme["accent"]}" font-family="Arial, sans-serif" font-size="28" font-weight="700">{escape(value)}</text>')
+        rows.append(f'<text x="{x}" y="172" fill="{theme["muted"]}" font-family="Arial, sans-serif" font-size="13">{escape(label)}</text>')
+        x += 200
+
+    updated_at = data.get("updated_at", "")
+    rows.append(f'<text x="32" y="197" fill="{theme["muted"]}" font-family="Arial, sans-serif" font-size="12">Datos auto-reportados · actualizado el {escape(updated_at)}</text>')
+
+    return _svg(title, "".join(rows), theme, indicator="manual")
 

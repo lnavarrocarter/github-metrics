@@ -31,15 +31,16 @@ Todas las rutas aceptan `?theme=` con uno de: `tokyonight` (default), `sunset`, 
 /cards/linkedin/<username>/overview.svg
 ```
 
-Ninguna de las dos plataformas ofrece una API pública para leer métricas de perfiles de terceros sin que cada usuario conecte su propia cuenta (Instagram exige una cuenta Business/Creator vinculada a una Página de Meta con OAuth propio; LinkedIn no tiene API pública de métricas de perfil para terceros). Por eso estas rutas hoy devuelven una tarjeta "próximamente" en vez de hacer scraping, que violaría los términos de servicio y sería poco confiable. El diseño ya deja el enrutamiento y la whitelist listos para conectar datos reales cuando cada usuario aporte sus propias credenciales OAuth.
+Ninguna de las dos plataformas ofrece una API pública para leer métricas de perfiles de terceros en vivo (Instagram exige una cuenta Business/Creator vinculada a una Página de Meta con OAuth propio; LinkedIn no tiene API pública de métricas de perfil para terceros). En vez de hacer scraping —que violaría sus términos de servicio y sería poco confiable— estas tarjetas muestran **datos auto-reportados por el propio dueño del perfil**, guardados en [config/profiles.json](config/profiles.json) y marcados explícitamente como "manual" (nunca se presentan como datos en vivo). Si tu usuario está en la whitelist pero no tiene datos cargados, la tarjeta muestra "pendiente" en vez de un error.
 
 ## Whitelist: cómo sumar tu perfil
 
 El servicio es multi-tenant pero cerrado por whitelist: sólo usuarios listados en [config/whitelist.json](config/whitelist.json) pueden generar tarjetas vía `/cards/<platform>/<username>/...`. Para sumarte:
 
-1. Haz un fork y abre un PR agregando tu usuario de GitHub al arreglo `github` en `config/whitelist.json`.
-2. Un mantenedor revisa y aprueba el PR (evita abuso y controla el consumo de la API de GitHub).
-3. Una vez mergeado y desplegado, usa `/cards/github/<tu-usuario>/overview.svg` en tu propio README.
+1. Haz un fork y abre un PR agregando tu usuario al arreglo del `platform` correspondiente (`github`, `instagram` o `linkedin`) en `config/whitelist.json`.
+2. Si es Instagram o LinkedIn, agrega también tus propios datos (nombre, handle, seguidores/conexiones, fecha) en `config/profiles.json` bajo tu usuario — nadie carga datos de otra persona.
+3. Un mantenedor revisa y aprueba el PR (evita abuso y controla el consumo de la API de GitHub).
+4. Una vez mergeado y desplegado, usa `/cards/<platform>/<tu-usuario>/<tarjeta>.svg` en tu propio README.
 
 Un usuario fuera de la whitelist recibe una tarjeta 403 "Acceso no autorizado", nunca un error genérico.
 

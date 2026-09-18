@@ -4,6 +4,7 @@ from flask import Flask, Response, jsonify, request
 
 from app.github import GitHubClient
 from app import svg
+from app.profiles import get_profile
 from app.whitelist import is_allowed
 
 
@@ -19,9 +20,9 @@ GITHUB_CARDS = {
 }
 
 # Instagram y LinkedIn no ofrecen una API pública para leer métricas de
-# cualquier perfil de terceros; se muestran como "próximamente" en vez de
-# intentar scraping, que rompe sus términos de servicio y es poco confiable.
-UNSUPPORTED_PLATFORMS = {"instagram", "linkedin"}
+# cualquier perfil de terceros en vivo; usan datos auto-reportados por el
+# propio dueño del perfil (ver app/profiles.py y config/profiles.json).
+MANUAL_PLATFORMS = {"instagram", "linkedin"}
 
 
 def svg_response(content, status=200):
@@ -46,10 +47,13 @@ def legacy_card(card):
 def public_card(platform, username, card):
     theme = request.args.get("theme")
 
-    if platform in UNSUPPORTED_PLATFORMS:
+    if platform in MANUAL_PLATFORMS:
         if not is_allowed(platform, username):
             return svg_response(svg.message_card("Acceso no autorizado", f"@{username} no está en la whitelist de {platform}.", theme, danger=True), status=403)
-        return svg_response(svg.message_card(f"{platform.title()} próximamente", "Esta plataforma no expone una API pública de métricas por perfil todavía.", theme))
+        data = get_profile(platform, username)
+        if not data:
+            return svg_response(svg.message_card(f"{platform.title()} pendiente", f"@{username} aún no cargó sus datos en config/profiles.json.", theme))
+        return svg_response(svg.social_profile(platform, data, theme))
 
     if platform != "github":
         return svg_response(svg.message_card("Plataforma no soportada", f"'{platform}' no está disponible.", theme, danger=True), status=404)
