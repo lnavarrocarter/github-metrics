@@ -28,7 +28,7 @@ def svg_response(content, status=200):
     return Response(content, status=status, mimetype="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"})
 
 
-@app.get("/healthz")
+@app.get("/status")
 def healthz():
     return jsonify(status="ok", username=DEFAULT_USERNAME)
 
