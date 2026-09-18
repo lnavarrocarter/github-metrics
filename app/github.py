@@ -7,7 +7,10 @@ from urllib.request import Request, urlopen
 
 class GitHubClient:
     def __init__(self, token=None, ttl_seconds=3600):
-        self.token = token or os.getenv("GITHUB_TOKEN")
+        # Secrets injected via env vars or files can carry trailing
+        # whitespace/newlines, which breaks HTTP header encoding.
+        raw_token = token or os.getenv("GITHUB_TOKEN") or ""
+        self.token = raw_token.strip() or None
         self.ttl_seconds = ttl_seconds
         self.cache = {}
 
